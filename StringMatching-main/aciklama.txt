@@ -1,0 +1,221 @@
+Aynen bu metin senin **string matching analiz projesini** çok güzel özetlemiş — ama sen “bunu bana **çok daha detaylı**, kapsamlı, düzgün bir rapor formatında açıkla” diyorsun.
+Aşağıda **tam olarak ders/proje raporuna koyabileceğin**, profesyonel ve teknik bir açıklama veriyorum.
+Hem anlaşılır, hem akademik, hem de senin kod mimarine birebir uygun anlatıyorum.
+
+---
+
+# 📌 **STRING MATCHING ANALİZ SİSTEMİ — Detaylı Proje Açıklaması**
+
+Bu proje, klasik ve modern string matching algoritmalarını bir arada test edebilen, performanslarını ölçen, hangi algoritmanın hangi senaryoda daha iyi çalıştığını analiz eden bir **benchmarking** ve **algorithm selection** sistemidir.
+
+Amaç yalnızca algoritmaları çalıştırmak değil; aynı zamanda:
+
+### ✔ Hızlarını ölçmek
+
+### ✔ Doğruluklarını karşılaştırmak
+
+### ✔ Farklı senaryolarda hangi algoritmanın kazandığını tespit etmek
+
+### ✔ Pre-analysis (ön analiz) ile **öngörü yapıp doğru algoritmayı otomatik seçmek**
+
+Bu yönüyle proje hem **teorik** hem **uygulamalı** değer taşır.
+
+---
+
+# 1. **String Matching Problemi**
+
+Amaç:
+Bir metin (**text**) içinde bir desenin (**pattern**) eşleştiği tüm konumları bulmak.
+
+Örnek:
+
+* Text: `"AABAACAADAABAABA"`
+* Pattern: `"AABA"`
+* Çıktı: `[0, 9, 12]`
+
+Bu problem:
+
+* editörlerde “CTRL+F”
+* veri tabanlarında arama
+* DNA/protein dizisi eşleşmesi
+* log tarama
+  gibi alanların temelini oluşturduğu için kritik öneme sahiptir.
+
+---
+
+# 2. **Sistemdeki Algoritmalar**
+
+Projede **beş farklı algoritma** için bir çatı sınıf (`Solution`) var.
+Her algoritma kendi sınıfında implement edilmiştir.
+
+### 2.1 Naive (Brute-Force)
+
+* Her pozisyonda pattern'i tek tek dener.
+* Zaman karmaşıklığı **O(n * m)**
+* Küçük desenlerde ve çok kısa text’lerde şaşırtıcı derecede iyi olabilir.
+
+### 2.2 KMP (Knuth-Morris-Pratt)
+
+* Pattern’in kendi içindeki tekrarları analiz eder.
+* Prefix function (LPS tablosu) sayesinde geri dönüş yapmaz.
+* En kötü zaman: **O(n + m)**
+* Tekrarlayan prefix barındıran pattern’lerde güçlü.
+
+### 2.3 Rabin-Karp
+
+* Hashing tabanlıdır.
+* Tüm eşleşmeleri hash üzerinden kontrol eder.
+* Ortalama: **O(n + m)**
+* En kötü: **O(n*m)**
+* Büyük text ve uzun pattern senaryolarında iyi performans verir.
+
+### 2.4 Boyer-Moore
+
+* İki temel kuralı vardır:
+
+  * Bad Character Rule
+  * Good Suffix Rule
+* Pattern’i sağdan sola okur → büyük hız kazandırır.
+* Büyük alfabe ve uzun pattern’lerde en hızlısı olabilir.
+
+### 2.5 GoCrazy (Hybrid)
+
+* Boyer-Moore + Rabin-Karp + Lokal Quick Checks gibi hibrit teknikler içerir.
+* Amaç, SOTA olmayan ama pratikte işe yarayan bir “çılgın hızlı” çözüm yaratmaktır.
+* Senin projende özgün bir algoritma olarak bulunuyor (ödev için güzel fikir).
+
+---
+
+# 3. **Pre-Analysis (Ön Algoritma Seçimi)**
+
+Bu sistemin gerçek zekâsı burada.
+
+Kullanıcı input vermeden önce algoritmayı seçmek için çeşitli heuristics çalışıyor:
+
+### Kullanılan kriterler:
+
+1. **Pattern uzunluğu**
+
+   * `<= 2` → Naive
+     (Zaten KMP’nin hazırlık maliyeti gereksiz olur.)
+
+2. **Pattern’in kendi içinde tekrar eden prefix olması**
+
+   * varsa → KMP seçilir
+     (LPS tablosu avantaj sağlar.)
+
+3. **Alfabe boyutu**
+
+   * büyükse → Boyer-Moore
+     (Bad character tablosu daha etkili olur.)
+
+4. **Pattern uzunluğu orta ve büyükse**
+
+   * Boyer-Moore veya GoCrazy tercih edilir.
+
+Bu sayede proje sadece test etmiyor ayrıca:
+
+* “Pre-analysis doğru tahmin yaptı mı?”
+* “Sistem doğru algoritmayı seçmeyi öğreniyor mu?”
+
+gibi analizler de yapıyor.
+
+---
+
+# 4. **Test Sistemi**
+
+Testler JSON dosyalarından okunur. Her test şunları içerir:
+
+* text
+* pattern
+* expected result (ör. `[0, 9, 12]`)
+
+Sistem her algoritmayı sırayla çalıştırır:
+
+### ✔ Doğruluk testi
+
+`result == expected` ?
+
+### ✔ Süre ölçümü
+
+nanoTime → mikrosaniyeye çevirilir.
+
+### ✔ Kazanan belirleme
+
+en küçük süreyi alan algoritma → "Winner"
+
+### ✔ Pre-analysis’ın seçtiği algoritma doğru mu?
+
+“Predicted winner” vs “Actual winner”
+
+Bu çok değerli çünkü projenin öğrenme/heuristic tarafını güçlendiriyor.
+
+---
+
+# 5. **Çıktı Tabloları**
+
+Örnek:
+
+```
+Test Case          BoyerMoore  Naive   KMP     RabinKarp  GoCrazy  Winner
+Simple Match       16.19 μs    9.79 μs 10.79 μs 10.71 μs  15.88 μs 🏆 Naive
+```
+
+Bu tablo bize şunları söyler:
+
+* Naive küçük text'lerde hâlâ çok hızlı.
+* Boyer-Moore ancak daha büyük alphabede fark yaratır.
+* KMP prefix avantajı olmayan patternlerde ortalama hızda kalır.
+* GoCrazy bazı testlerde çok hızlı olabilir, bazılarında çok kötü olabilir.
+
+---
+
+# 6. **Projenin Önemi**
+
+Bu proje bir “implementasyon ödevi” olmanın çok ötesinde:
+
+### ✔ 1. Algoritmaların davranışını gerçek veride gözlemlemeyi sağlıyor
+
+Teorik Big-O gerçek hız demek değildir.
+
+### ✔ 2. Her algoritmanın güçlü/zayıf yanlarını gösteriyor
+
+* Boyer-Moore → büyük alfabe
+* KMP → tekrar eden prefix
+* RK → uzun pattern
+* GoCrazy → hibrit deneme
+
+### ✔ 3. Pre-analysis ile otomatik algoritma seçimi yapıyor
+
+Bu yaklaşım:
+
+* editörlerde
+* arama motorlarında
+* biyoinformatikte
+  aktif olarak kullanılıyor.
+
+### ✔ 4. Genişletilebilir mimari
+
+Yeni algoritmalar eklemek çok kolay:
+
+* `Solution` extends edilip
+* `findAll` implement edilerek
+* analysis'e eklenir
+
+---
+
+# 7. **Genel Özet**
+
+Bu proje; sadece algoritmaların kodlandığı bir çalışma değil,
+**algoritmaların davranışlarının bilimsel olarak ölçüldüğü ve yorumlandığı bir analiz platformudur.**
+
+### Sistemde:
+
+* 5 algoritma implement edilmiştir
+* Pre-analysis algoritma seçimi yapılır
+* Her testte hız + doğruluk ölçülür
+* Kazanan algoritma belirlenir
+* Tahminin doğruluğu hesaplanır
+* Tablolarla profesyonel sonuç çıktısı üretilir
+
+Gerçek bir benchmark sisteminin minyatür akademik versiyonudur.
