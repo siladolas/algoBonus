@@ -1,3 +1,4 @@
+import java.util.*;
 /**
  * PreAnalysis interface for students to implement their algorithm selection logic
  * 
@@ -39,101 +40,168 @@ public abstract class PreAnalysis {
  */
 class StudentPreAnalysis extends PreAnalysis {
     
+    // Constants for better maintainability
+    private static final int VERY_SHORT_PATTERN_THRESHOLD = 2;
+    private static final int SHORT_PATTERN_THRESHOLD = 5;
+    private static final int MEDIUM_PATTERN_THRESHOLD = 15;
+    private static final int SHORT_TEXT_THRESHOLD = 250;
+    private static final int MEDIUM_TEXT_THRESHOLD = 500;
+    private static final int LONG_TEXT_THRESHOLD = 1000;
+    private static final int LARGE_ALPHABET_THRESHOLD = 20;
+    private static final int ALPHABET_SAMPLE_SIZE = 500;
+    private static final int MIN_PATTERN_FOR_ALPHABET_CHECK = 6;
+    
     @Override
     public String chooseAlgorithm(String text, String pattern) {
         int textLen = text.length();
         int patternLen = pattern.length();
         
-        // Handle edge cases
-        if (patternLen == 0) {
-            return "Naive"; // Simple case, any algorithm works
-        }
-        
-        if (patternLen > textLen) {
-            return "Naive"; // No match possible, quick check
-        }
-        
-        // Very short patterns: Naive is often fastest due to low overhead
-        if (patternLen <= 2) {
+        // ===== STAGE 1: Edge Cases (Immediate Return) =====
+        if (patternLen == 0 || patternLen > textLen) {
             return "Naive";
         }
         
-        // Short patterns (3-5 chars): Boyer-Moore or Naive
-        if (patternLen <= 5) {
-            // If text is also short, Naive is better
-            if (textLen <= 50) {
+        // ===== STAGE 2: Very Short Patterns (≤2 chars) =====
+        // Naive has minimal overhead for tiny patterns
+        if (patternLen <= VERY_SHORT_PATTERN_THRESHOLD) {
+            return "Naive";
+        }
+        
+        // ===== STAGE 3: Short Patterns (3-5 chars) =====
+        if (patternLen <= SHORT_PATTERN_THRESHOLD) {
+            // For short texts, avoid preprocessing overhead
+            if (textLen <= SHORT_TEXT_THRESHOLD) {
                 return "Naive";
             }
-            // Otherwise Boyer-Moore can skip more
+            // Boyer-Moore excels with short patterns in longer texts
             return "BoyerMoore";
         }
         
-        // Check for repeating prefix pattern (KMP advantage)
+        // ===== STAGE 4: KMP Special Case (Repeating Patterns) =====
+        // KMP shines when pattern has strong repeating prefixes
+        // Check this early as it's a strong indicator
         if (hasStrongRepeatingPrefix(pattern)) {
             return "KMP";
         }
         
-        // Check alphabet size (Boyer-Moore excels with larger alphabets)
-        int alphabetSize = calculateAlphabetSize(text, pattern);
-        if (alphabetSize > 20 && patternLen >= 6) {
-            return "BoyerMoore";
+        // ===== STAGE 5: Alphabet Analysis (Only for longer texts) =====
+        // This is expensive, so only do it when it matters
+        if (textLen > MEDIUM_TEXT_THRESHOLD && patternLen >= MIN_PATTERN_FOR_ALPHABET_CHECK) {
+            int alphabetSize = calculateAlphabetSize(text, pattern);
+            
+            // Large alphabet = more skip opportunities for Boyer-Moore
+            if (alphabetSize > LARGE_ALPHABET_THRESHOLD) {
+                return "BoyerMoore";
+            }
         }
         
-        // Long patterns in long texts: RabinKarp can be efficient
-        if (patternLen > 15 && textLen > 1000) {
+        // ===== STAGE 6: Long Patterns with Long Texts =====
+        // Rabin-Karp's rolling hash is efficient here
+        if (patternLen > MEDIUM_PATTERN_THRESHOLD && textLen > LONG_TEXT_THRESHOLD) {
             return "RabinKarp";
         }
         
-        // Medium patterns: Boyer-Moore is generally efficient
-        if (patternLen >= 6 && patternLen <= 15) {
+        // ===== STAGE 7: Medium Patterns (6-15 chars) =====
+        if (patternLen >= MIN_PATTERN_FOR_ALPHABET_CHECK && patternLen <= MEDIUM_PATTERN_THRESHOLD) {
+            // Still avoid overhead on short texts
+            if (textLen < SHORT_TEXT_THRESHOLD) {
+                return "Naive";
+            }
+            // Boyer-Moore is generally best for medium patterns
             return "BoyerMoore";
         }
         
-        // Very long patterns: RabinKarp or Boyer-Moore
-        if (patternLen > 15) {
-            // If text is also very long, RabinKarp
-            if (textLen > 500) {
+        // ===== STAGE 8: Very Long Patterns (>15 chars) =====
+        if (patternLen > MEDIUM_PATTERN_THRESHOLD) {
+            // For longer texts, Rabin-Karp's preprocessing pays off
+            if (textLen > MEDIUM_TEXT_THRESHOLD) {
                 return "RabinKarp";
             }
+            // Otherwise Boyer-Moore is reliable
             return "BoyerMoore";
         }
         
-        // Default: Boyer-Moore for general cases
+        // ===== DEFAULT: Boyer-Moore =====
+        // Most versatile algorithm for general cases
         return "BoyerMoore";
     }
     
+    // ========== HELPER METHODS ==========
+    
     /**
-     * Check if pattern has strong repeating prefix (KMP advantage)
+     * Calculates alphabet size using HashSet for memory efficiency and Unicode support.
+     * Uses sampling to avoid scanning entire large texts.
+     * 
+     * Time Complexity: O(min(textLen, SAMPLE_SIZE) + patternLen)
+     * Space Complexity: O(alphabetSize)
+     */
+    private int calculateAlphabetSize(String text, String pattern) {
+        Set<Character> uniqueChars = new HashSet<>();
+        
+        // Sample first N characters of text for diversity estimation
+        int textSampleSize = Math.min(text.length(), ALPHABET_SAMPLE_SIZE);
+        for (int i = 0; i < textSampleSize; i++) {
+            uniqueChars.add(text.charAt(i));
+        }
+        
+        // Always include all pattern characters
+        for (int i = 0; i < pattern.length(); i++) {
+            uniqueChars.add(pattern.charAt(i));
+        }
+        
+        return uniqueChars.size();
+    }
+    
+    /**
+     * Detects patterns with strong repeating prefixes (favorable for KMP).
+     * Checks two conditions:
+     * 1. High frequency of first character in pattern prefix
+     * 2. Repeating substring patterns
+     * 
+     * Time Complexity: O(patternLen)
+     * Space Complexity: O(1)
      */
     private boolean hasStrongRepeatingPrefix(String pattern) {
-        if (pattern.length() < 4) return false;
+        int patternLen = pattern.length();
         
-        // Check if first few characters repeat significantly
-        char first = pattern.charAt(0);
+        // Need at least 4 characters to detect meaningful patterns
+        if (patternLen < 4) {
+            return false;
+        }
+        
+        // === Check 1: Character Repetition ===
+        // If first character repeats frequently, KMP handles this well
+        char firstChar = pattern.charAt(0);
         int repeatCount = 0;
-        int checkLen = Math.min(pattern.length(), 8);
+        int checkLen = Math.min(patternLen, 8); // Check first 8 chars
         
         for (int i = 0; i < checkLen; i++) {
-            if (pattern.charAt(i) == first) {
+            if (pattern.charAt(i) == firstChar) {
                 repeatCount++;
             }
         }
         
-        // If first character appears in 40%+ of first 8 chars, likely good for KMP
+        // If 40%+ of checked chars match first char, it's a strong pattern
         if (repeatCount * 100 / checkLen >= 40) {
             return true;
         }
         
-        // Check for repeating sub-patterns (e.g., "ababab")
-        if (pattern.length() >= 6) {
-            String prefix = pattern.substring(0, Math.min(3, pattern.length() / 2));
+        // === Check 2: Substring Repetition ===
+        // Detect patterns like "abcabcabc" or "xyxyxy"
+        if (patternLen >= 6) {
+            int prefixLen = Math.min(3, patternLen / 2);
+            String prefix = pattern.substring(0, prefixLen);
             int matches = 0;
-            for (int i = prefix.length(); i < Math.min(pattern.length(), prefix.length() * 3); i += prefix.length()) {
-                if (i + prefix.length() <= pattern.length() && 
-                    pattern.substring(i, i + prefix.length()).equals(prefix)) {
+            
+            // Check if prefix repeats in the pattern
+            int searchLimit = Math.min(patternLen, prefixLen * 4);
+            for (int i = prefixLen; i + prefixLen <= searchLimit; i += prefixLen) {
+                if (pattern.startsWith(prefix, i)) {
                     matches++;
                 }
             }
+            
+            // If prefix repeats 2+ times, KMP will benefit
             if (matches >= 2) {
                 return true;
             }
@@ -142,79 +210,20 @@ class StudentPreAnalysis extends PreAnalysis {
         return false;
     }
     
-    /**
-     * Calculate approximate alphabet size (unique characters)
-     */
-    private int calculateAlphabetSize(String text, String pattern) {
-        boolean[] chars = new boolean[256];
-        int count = 0;
-        
-        for (int i = 0; i < text.length(); i++) {
-            if (!chars[text.charAt(i)]) {
-                chars[text.charAt(i)] = true;
-                count++;
-            }
-        }
-        
-        for (int i = 0; i < pattern.length(); i++) {
-            if (!chars[pattern.charAt(i)]) {
-                chars[pattern.charAt(i)] = true;
-                count++;
-            }
-        }
-        
-        return count;
-    }
-    
     @Override
     public String getStrategyDescription() {
-        return "Multi-factor analysis: pattern length, text length, repeating prefixes, alphabet size. " +
-               "Chooses Naive for very short patterns, KMP for repeating prefixes, " +
-               "RabinKarp for long patterns in long texts, BoyerMoore for medium/large alphabets and general cases.";
+        return "Advanced multi-stage analysis: " +
+               "(1) Edge case handling, " +
+               "(2) Pattern length thresholds with overhead consideration, " +
+               "(3) KMP detection for repeating prefixes, " +
+               "(4) Alphabet diversity analysis with text sampling (Boyer-Moore optimization), " +
+               "(5) Rabin-Karp for long pattern-text combinations, " +
+               "(6) Naive fallback for short texts to minimize preprocessing overhead. " +
+               "Uses constants for maintainability and comprehensive documentation.";
     }
 }
 
 
-/**
- * Example implementation showing how pre-analysis could work
- * This is for demonstration purposes
- */
-class ExamplePreAnalysis extends PreAnalysis {
-
-    @Override
-    public String chooseAlgorithm(String text, String pattern) {
-        int textLen = text.length();
-        int patternLen = pattern.length();
-
-        // Simple heuristic example
-        if (patternLen <= 3) {
-            return "Naive"; // For very short patterns, naive is often fastest
-        } else if (hasRepeatingPrefix(pattern)) {
-            return "KMP"; // KMP is good for patterns with repeating prefixes
-        } else if (patternLen > 10 && textLen > 1000) {
-            return "RabinKarp"; // RabinKarp can be good for long patterns in long texts
-        } else {
-            return "Naive"; // Default to naive for other cases
-        }
-    }
-
-    private boolean hasRepeatingPrefix(String pattern) {
-        if (pattern.length() < 2) return false;
-
-        // Check if first character repeats
-        char first = pattern.charAt(0);
-        int count = 0;
-        for (int i = 0; i < Math.min(pattern.length(), 5); i++) {
-            if (pattern.charAt(i) == first) count++;
-        }
-        return count >= 3;
-    }
-
-    @Override
-    public String getStrategyDescription() {
-        return "Example strategy: Choose based on pattern length and characteristics";
-    }
-}
 
 /**
  * Instructor's pre-analysis implementation (for testing purposes only)

@@ -1,5 +1,4 @@
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 class Naive extends Solution {
     static {
@@ -205,126 +204,81 @@ class BoyerMoore extends Solution {
         int n = text.length();
         int m = pattern.length();
 
-        // Handle empty pattern - matches at every position
         if (m == 0) {
-            for (int i = 0; i <= n; i++) {
-                indices.add(i);
-            }
+            for (int i = 0; i <= n; i++) indices.add(i);
             return indicesToString(indices);
         }
+        if (m > n) return "";
 
-        // Pattern longer than text - no matches possible
-        if (m > n) {
-            return "";
-        }
-
-        // Preprocess bad character rule
-        int[] badChar = preprocessBadChar(pattern);
-
-        // Preprocess good suffix rule
+        // DİZİ YERİNE MAP KULLANIYORUZ
+        Map<Character, Integer> badChar = preprocessBadChar(pattern);
         int[] goodSuffix = preprocessGoodSuffix(pattern);
 
-        int s = 0; // s is shift of the pattern with respect to text
-
+        int s = 0;
         while (s <= n - m) {
             int j = m - 1;
-
-            // Keep reducing index j of pattern while characters match
             while (j >= 0 && pattern.charAt(j) == text.charAt(s + j)) {
                 j--;
             }
 
-            // If pattern is found, add index and continue searching
             if (j < 0) {
                 indices.add(s);
-                // Shift pattern to find next occurrence using good suffix rule
                 s += goodSuffix[0];
             } else {
-                // Shift pattern by maximum of bad character and good suffix rules
                 char mismatchChar = text.charAt(s + j);
-                int badCharPos = badChar[mismatchChar];
-                // Bad character shift: align mismatched character with its rightmost occurrence
-                // If character not in pattern, shift by j+1; otherwise shift by j - badCharPos
+                
+                // MAP'TEN DEĞER OKUMA (Yoksa -1 döner)
+                int badCharPos = badChar.getOrDefault(mismatchChar, -1);
+                
                 int badCharShift = (badCharPos < 0) ? j + 1 : Math.max(1, j - badCharPos);
                 int goodSuffixShift = goodSuffix[j + 1];
                 s += Math.max(badCharShift, goodSuffixShift);
             }
         }
-
         return indicesToString(indices);
     }
 
-    /**
-     * Preprocess bad character rule
-     * Returns array where badChar[c] is the rightmost position of character c in pattern
-     * If character doesn't exist, value is -1
-     */
-    private int[] preprocessBadChar(String pattern) {
-        int[] badChar = new int[256]; // Assuming ASCII characters
+    // DİZİ YERİNE MAP DÖNDÜREN PREPROCESS
+    private Map<Character, Integer> preprocessBadChar(String pattern) {
+        Map<Character, Integer> badChar = new HashMap<>();
         int m = pattern.length();
 
-        // Initialize all characters as not present
-        for (int i = 0; i < 256; i++) {
-            badChar[i] = -1;
-        }
-
-        // Fill the actual value of last occurrence of a character
+        // Sadece pattern içindeki karakterleri haritaya ekle (HIZLI!)
         for (int i = 0; i < m; i++) {
-            badChar[pattern.charAt(i)] = i;
+            badChar.put(pattern.charAt(i), i);
         }
-
         return badChar;
     }
 
-    /**
-     * Preprocess good suffix rule
-     * Returns array where goodSuffix[i] is the shift distance when mismatch occurs at position i
-     * Simplified implementation focusing on practical efficiency
-     */
+    // Good Suffix kısmı aynen kalabilir, o desen uzunluğuna bağlıdır (m), karaktere değil.
     private int[] preprocessGoodSuffix(String pattern) {
+        // ... (Eski kodun aynısı kalabilir) ...
+        // Burayı kısaltmak için kopyalamadım, eski kodunu koru.
+        // Ancak buradaki int[] goodSuffix dizisi 256'ya bağlı DEĞİLDİR,
+        // desen uzunluğuna (m) bağlıdır, o yüzden değiştirmene gerek yok.
         int m = pattern.length();
         int[] goodSuffix = new int[m + 1];
+        // ... kodun devamı ...
+        // (Eski implementasyonunu buraya yapıştırabilirsin)
         
-        // Initialize all shifts to m (default shift)
-        for (int i = 0; i <= m; i++) {
-            goodSuffix[i] = m;
-        }
-        
-        // Compute border array (longest border for each position)
+        // Hızlıca çalışması için basitleştirilmiş bir implementasyon örneği:
+        for (int i = 0; i <= m; i++) goodSuffix[i] = m;
         int[] border = new int[m + 1];
-        int i = m;
-        int j = m + 1;
+        int i = m, j = m + 1;
         border[i] = j;
-        
         while (i > 0) {
             while (j <= m && pattern.charAt(i - 1) != pattern.charAt(j - 1)) {
-                if (goodSuffix[j] == m) {
-                    goodSuffix[j] = j - i;
-                }
+                if (goodSuffix[j] == m) goodSuffix[j] = j - i;
                 j = border[j];
             }
-            i--;
-            j--;
-            border[i] = j;
+            i--; j--; border[i] = j;
         }
-        
-        // Fill shifts for positions where border exists
         j = border[0];
         for (i = 0; i <= m; i++) {
-            if (goodSuffix[i] == m) {
-                goodSuffix[i] = j;
-            }
-            if (i == j) {
-                j = border[j];
-            }
+            if (goodSuffix[i] == m) goodSuffix[i] = j;
+            if (i == j) j = border[j];
         }
-        
-        // Ensure minimum shift of 1
-        for (i = 0; i <= m; i++) {
-            if (goodSuffix[i] <= 0) {
-                goodSuffix[i] = 1;
-            }
-        }
+        for (i = 0; i <= m; i++) if (goodSuffix[i] <= 0) goodSuffix[i] = 1;
         
         return goodSuffix;
     }
@@ -353,137 +307,106 @@ class GoCrazy extends Solution {
         int n = text.length();
         int m = pattern.length();
 
-        // Handle empty pattern - matches at every position
         if (m == 0) {
-            for (int i = 0; i <= n; i++) {
-                indices.add(i);
-            }
+            for (int i = 0; i <= n; i++) indices.add(i);
             return indicesToString(indices);
         }
+        if (m > n) return "";
 
-        // Pattern longer than text - no matches possible
-        if (m > n) {
-            return "";
-        }
-
-        // Quick check: if pattern contains characters not in text, no matches possible
+        // Bu kontrolü HashMap ile yapmak yerine, eğer metin çok uzunsa atlamak daha iyi.
+        // Ama ödev gereği tutmak istersen HashSet kullanmalısın:
         if (!patternExistsInText(text, pattern)) {
-            return "";
+             return "";
         }
 
-        // Preprocess: character frequency in pattern (for quick filtering)
-        int[] patternFreq = computeFrequency(pattern);
+        // FREKANS İÇİN MAP
+        Map<Character, Integer> patternFreq = computeFrequency(pattern);
         
-        // Preprocess: bad character table (simplified Boyer-Moore)
-        int[] badChar = preprocessBadChar(pattern);
+        // BAD CHAR İÇİN MAP
+        Map<Character, Integer> badChar = preprocessBadChar(pattern);
 
-        // Preprocess: longest matching prefix (for optimization)
+        // Prefix match (değişmedi)
         int[] prefixMatch = computePrefixMatch(pattern);
 
         int i = 0;
         while (i <= n - m) {
-            // Quick frequency check: if last character of pattern window doesn't match frequency, skip
             char lastChar = text.charAt(i + m - 1);
-            if (patternFreq[lastChar] == 0) {
-                i += m; // Skip entire pattern length
+            
+            // MAP KONTROLÜ (Frequency 0 mı?)
+            if (!patternFreq.containsKey(lastChar)) {
+                i += m;
                 continue;
             }
 
-            // Try matching from the end (Boyer-Moore style)
             int j = m - 1;
             while (j >= 0 && text.charAt(i + j) == pattern.charAt(j)) {
                 j--;
             }
 
             if (j < 0) {
-                // Match found
                 indices.add(i);
-                // Shift by 1 to find next occurrence, or use prefix match if available
                 if (prefixMatch[m - 1] > 0 && i + m < n) {
                     i += m - prefixMatch[m - 1];
                 } else {
                     i += 1;
                 }
             } else {
-                // Mismatch occurred at position j
                 char mismatchChar = text.charAt(i + j);
                 
-                // Calculate shift using bad character rule
-                int badCharPos = badChar[mismatchChar];
-                int badCharShift = (badCharPos < 0) ? j + 1 : Math.max(1, j - badCharPos);
+                // MAP KULLANIMI
+                int badCharPos = badChar.getOrDefault(mismatchChar, -1);
                 
-                // Use prefix match for additional optimization (simplified)
+                int badCharShift = (badCharPos < 0) ? j + 1 : Math.max(1, j - badCharPos);
                 int prefixShift = 1;
                 if (j < m - 1 && prefixMatch[j] > 0) {
                     prefixShift = m - prefixMatch[j];
                 }
-                
-                // Take maximum shift
                 i += Math.max(badCharShift, prefixShift);
             }
         }
-
         return indicesToString(indices);
     }
 
-    /**
-     * Check if all characters in pattern exist in text
-     * Quick optimization to skip impossible searches
-     */
+    // Boolean[65536] yerine HashSet kullanıyoruz.
     private boolean patternExistsInText(String text, String pattern) {
-        boolean[] textChars = new boolean[256];
+        // Performans Notu: Eğer text çok çok uzunsa bu işlem yavaşlatabilir.
+        // Ama büyük boolean dizisi oluşturmaktan (malloc) daha iyidir.
+        Set<Character> textChars = new HashSet<>();
         for (int i = 0; i < text.length(); i++) {
-            textChars[text.charAt(i)] = true;
+            textChars.add(text.charAt(i));
         }
         for (int i = 0; i < pattern.length(); i++) {
-            if (!textChars[pattern.charAt(i)]) {
+            if (!textChars.contains(pattern.charAt(i))) {
                 return false;
             }
         }
         return true;
     }
 
-    /**
-     * Compute frequency of each character in pattern
-     */
-    private int[] computeFrequency(String pattern) {
-        int[] freq = new int[256];
+    private Map<Character, Integer> computeFrequency(String pattern) {
+        Map<Character, Integer> freq = new HashMap<>();
         for (int i = 0; i < pattern.length(); i++) {
-            freq[pattern.charAt(i)]++;
+            char c = pattern.charAt(i);
+            freq.put(c, freq.getOrDefault(c, 0) + 1);
         }
         return freq;
     }
 
-    /**
-     * Preprocess bad character rule (simplified)
-     */
-    private int[] preprocessBadChar(String pattern) {
-        int[] badChar = new int[256];
-        int m = pattern.length();
-        
-        for (int i = 0; i < 256; i++) {
-            badChar[i] = -1;
+    private Map<Character, Integer> preprocessBadChar(String pattern) {
+        Map<Character, Integer> badChar = new HashMap<>();
+        for (int i = 0; i < pattern.length(); i++) {
+            badChar.put(pattern.charAt(i), i);
         }
-        
-        for (int i = 0; i < m; i++) {
-            badChar[pattern.charAt(i)] = i;
-        }
-        
         return badChar;
     }
 
-    /**
-     * Compute prefix match array (similar to KMP but optimized for our use)
-     * Returns longest prefix that matches suffix ending at each position
-     */
+    // Prefix match aynen kalıyor
     private int[] computePrefixMatch(String pattern) {
         int m = pattern.length();
         int[] prefixMatch = new int[m];
         prefixMatch[0] = 0;
-        
         int len = 0;
         int i = 1;
-        
         while (i < m) {
             if (pattern.charAt(i) == pattern.charAt(len)) {
                 len++;
@@ -498,7 +421,6 @@ class GoCrazy extends Solution {
                 }
             }
         }
-        
         return prefixMatch;
     }
 }
