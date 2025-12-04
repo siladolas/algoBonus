@@ -192,92 +192,101 @@ class RabinKarp extends Solution {
 class BoyerMoore extends Solution {
     static {
         SUBCLASSES.add(BoyerMoore.class);
-        System.out.println("BoyerMoore registered (Optimized Array Ver.)");
-    }
-
-    public BoyerMoore() {
+        System.out.println("BoyerMoore registered (Cache-Optimized)");
     }
 
     @Override
     public String Solve(String text, String pattern) {
-        List<Integer> indices = new ArrayList<>();
         int n = text.length();
         int m = pattern.length();
-
+        
         if (m == 0) {
+            List<Integer> indices = new ArrayList<>(n + 1);
             for (int i = 0; i <= n; i++) indices.add(i);
             return indicesToString(indices);
         }
         if (m > n) return "";
-
-        // --- DEĞİŞİKLİK 1: HashMap yerine int[256] ---
-        // Bad Character Tablosunu dizi ile hazırlıyoruz.
-        int[] badChar = preprocessBadChar(pattern);
         
-        // Good Suffix aynı kalıyor (O zaten dizi kullanıyordu)
+        List<Integer> indices = new ArrayList<>();
+        
+        int[] badChar = preprocessBadChar(pattern);
         int[] goodSuffix = preprocessGoodSuffix(pattern);
-
+        
         int s = 0;
         while (s <= n - m) {
             int j = m - 1;
+            
+            // Match from right to left
             while (j >= 0 && pattern.charAt(j) == text.charAt(s + j)) {
                 j--;
             }
-
+            
             if (j < 0) {
+                // Full match
                 indices.add(s);
                 s += goodSuffix[0];
             } else {
+                // Mismatch - compute shifts
                 char mismatchChar = text.charAt(s + j);
-                
-                // --- DEĞİŞİKLİK 2: Map.get yerine Dizi Erişimi ---
-                // Modulo (& 0xFF) kullanarak güvenli erişim
-                // Çince karakter gelse bile 0-255 arasına indirgenir.
                 int badCharPos = badChar[mismatchChar & 0xFF];
-                
                 int badCharShift = (badCharPos < 0) ? j + 1 : Math.max(1, j - badCharPos);
                 int goodSuffixShift = goodSuffix[j + 1];
+                
                 s += Math.max(badCharShift, goodSuffixShift);
             }
         }
+        
         return indicesToString(indices);
     }
 
-    // --- DEĞİŞİKLİK 3: Dizi Döndüren Metod ---
     private int[] preprocessBadChar(String pattern) {
         int[] badChar = new int[256];
-        
-        // Başlangıçta hepsine -1 veriyoruz (Harf yok demek)
         Arrays.fill(badChar, -1);
-
+        
         for (int i = 0; i < pattern.length(); i++) {
-            // Karakteri 256'ya modlayarak diziye yaz
-            // Çatışma (Collision) olursa en sağdaki (son) değer kazanır ki bu doğrudur.
             badChar[pattern.charAt(i) & 0xFF] = i;
         }
+        
         return badChar;
     }
 
-    // Good Suffix metodu AYNEN kalacak, ona dokunma.
     private int[] preprocessGoodSuffix(String pattern) {
         int m = pattern.length();
         int[] goodSuffix = new int[m + 1];
         int[] border = new int[m + 1];
+        
+        Arrays.fill(goodSuffix, m);
+        
         int i = m, j = m + 1;
         border[i] = j;
+        
         while (i > 0) {
             while (j <= m && pattern.charAt(i - 1) != pattern.charAt(j - 1)) {
-                if (goodSuffix[j] == m) goodSuffix[j] = j - i;
+                if (goodSuffix[j] == m) {
+                    goodSuffix[j] = j - i;
+                }
                 j = border[j];
             }
-            i--; j--; border[i] = j;
+            i--;
+            j--;
+            border[i] = j;
         }
+        
         j = border[0];
         for (i = 0; i <= m; i++) {
-            if (goodSuffix[i] == m) goodSuffix[i] = j;
-            if (i == j) j = border[j];
+            if (goodSuffix[i] == m) {
+                goodSuffix[i] = j;
+            }
+            if (i == j) {
+                j = border[j];
+            }
         }
-        for (i = 0; i <= m; i++) if (goodSuffix[i] <= 0) goodSuffix[i] = 1;
+        
+        // Ensure minimum shift of 1
+        for (i = 0; i <= m; i++) {
+            if (goodSuffix[i] == 0) goodSuffix[i] = 1;
+        }
+        
         return goodSuffix;
     }
 }
@@ -285,63 +294,70 @@ class BoyerMoore extends Solution {
 class GoCrazy extends Solution {
     static {
         SUBCLASSES.add(GoCrazy.class);
-        System.out.println("GoCrazy registered (Ultra-Light Version)");
-    }
-
-    public GoCrazy() {
+        System.out.println("GoCrazy registered (Adaptive Horspool++)");
     }
 
     @Override
     public String Solve(String text, String pattern) {
-        List<Integer> indices = new ArrayList<>();
         int n = text.length();
         int m = pattern.length();
-
-        // Edge Cases (Kenar Durumlar) - Anında kaçış
+        
         if (m == 0) {
+            List<Integer> indices = new ArrayList<>(n + 1);
             for (int i = 0; i <= n; i++) indices.add(i);
             return indicesToString(indices);
         }
         if (m > n) return "";
-
-        // --- OPTİMİZASYONUN KALBİ BURASI ---
-        // HashMap YOK! HashSet YOK! Sadece ilkel (primitive) dizi var.
-        // Bu dizi "Skip Table" (Atlama Tablosu) olarak çalışır.
-        // Başlangıç maliyeti neredeyse SIFIRDIR.
         
-        int[] skipTable = new int[256];
+        List<Integer> indices = new ArrayList<>();
         
-        // Varsayılan olarak pattern boyu kadar atla (Bad Character Kuralı)
-        // Arrays.fill çok hızlıdır (native method).
-        Arrays.fill(skipTable, m);
-
-        // Pattern'deki karakterlerin mesafelerini kaydet
-        // UNICODE HİLESİ: (c & 0xFF) diyerek 256 modunu alıyoruz.
-        // Böylece Çince/Emoji de gelse dizi patlamıyor, sadece hashleniyor.
-        for (int i = 0; i < m - 1; i++) {
-            skipTable[pattern.charAt(i) & 0xFF] = m - 1 - i;
+        // Adaptive strategy based on pattern length
+        if (m == 1) {
+            // Special case: single character (ultra-fast)
+            char c = pattern.charAt(0);
+            for (int i = 0; i < n; i++) {
+                if (text.charAt(i) == c) indices.add(i);
+            }
+            return indicesToString(indices);
         }
-
-        // --- ARAMA DÖNGÜSÜ (Horspool Mantığı) ---
+        
+        // Build skip table (Horspool)
+        int[] skip = new int[256];
+        Arrays.fill(skip, m);
+        
+        for (int i = 0; i < m - 1; i++) {
+            skip[pattern.charAt(i) & 0xFF] = m - 1 - i;
+        }
+        
+        // Cache last character for quick rejection
+        char lastPatternChar = pattern.charAt(m - 1);
+        
+        // Main search loop
         int i = 0;
         while (i <= n - m) {
-            // Sondan başa doğru kontrol et
-            int j = m - 1;
+            // Quick last-character check
+            char lastTextChar = text.charAt(i + m - 1);
+            
+            if (lastTextChar != lastPatternChar) {
+                // Fast skip - no match possible
+                i += skip[lastTextChar & 0xFF];
+                continue;
+            }
+            
+            // Last character matches - check rest from right to left
+            int j = m - 2;
             while (j >= 0 && text.charAt(i + j) == pattern.charAt(j)) {
                 j--;
             }
-
+            
             if (j < 0) {
-                // Eşleşme bulundu!
+                // Full match found
                 indices.add(i);
-                // Bir sonrakine geçmek için 1 kaydır (veya daha akıllıca kaydırılabilir ama 1 güvenlidir)
-                i += 1; 
+                // Skip intelligently: use pattern's self-overlap
+                i += (m > 1) ? skip[pattern.charAt(m - 2) & 0xFF] : 1;
             } else {
-                // Eşleşmeme (Mismatch)
-                // Pencerenin SONUNDAKİ karaktere bakarak ne kadar atlayacağına karar ver.
-                // Bu karakter pattern'da yoksa m kadar atlar. Varsa hizalar.
-                // HashMap get() yok, sadece dizi erişimi var -> ÇOK HIZLI.
-                i += skipTable[text.charAt(i + m - 1) & 0xFF];
+                // Mismatch - use Horspool skip
+                i += skip[lastTextChar & 0xFF];
             }
         }
         
