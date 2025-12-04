@@ -192,7 +192,7 @@ class RabinKarp extends Solution {
 class BoyerMoore extends Solution {
     static {
         SUBCLASSES.add(BoyerMoore.class);
-        System.out.println("BoyerMoore registered");
+        System.out.println("BoyerMoore registered (Optimized Array Ver.)");
     }
 
     public BoyerMoore() {
@@ -210,8 +210,11 @@ class BoyerMoore extends Solution {
         }
         if (m > n) return "";
 
-        // DİZİ YERİNE MAP KULLANIYORUZ
-        Map<Character, Integer> badChar = preprocessBadChar(pattern);
+        // --- DEĞİŞİKLİK 1: HashMap yerine int[256] ---
+        // Bad Character Tablosunu dizi ile hazırlıyoruz.
+        int[] badChar = preprocessBadChar(pattern);
+        
+        // Good Suffix aynı kalıyor (O zaten dizi kullanıyordu)
         int[] goodSuffix = preprocessGoodSuffix(pattern);
 
         int s = 0;
@@ -227,8 +230,10 @@ class BoyerMoore extends Solution {
             } else {
                 char mismatchChar = text.charAt(s + j);
                 
-                // MAP'TEN DEĞER OKUMA (Yoksa -1 döner)
-                int badCharPos = badChar.getOrDefault(mismatchChar, -1);
+                // --- DEĞİŞİKLİK 2: Map.get yerine Dizi Erişimi ---
+                // Modulo (& 0xFF) kullanarak güvenli erişim
+                // Çince karakter gelse bile 0-255 arasına indirgenir.
+                int badCharPos = badChar[mismatchChar & 0xFF];
                 
                 int badCharShift = (badCharPos < 0) ? j + 1 : Math.max(1, j - badCharPos);
                 int goodSuffixShift = goodSuffix[j + 1];
@@ -238,31 +243,25 @@ class BoyerMoore extends Solution {
         return indicesToString(indices);
     }
 
-    // DİZİ YERİNE MAP DÖNDÜREN PREPROCESS
-    private Map<Character, Integer> preprocessBadChar(String pattern) {
-        Map<Character, Integer> badChar = new HashMap<>();
-        int m = pattern.length();
+    // --- DEĞİŞİKLİK 3: Dizi Döndüren Metod ---
+    private int[] preprocessBadChar(String pattern) {
+        int[] badChar = new int[256];
+        
+        // Başlangıçta hepsine -1 veriyoruz (Harf yok demek)
+        Arrays.fill(badChar, -1);
 
-        // Sadece pattern içindeki karakterleri haritaya ekle (HIZLI!)
-        for (int i = 0; i < m; i++) {
-            badChar.put(pattern.charAt(i), i);
+        for (int i = 0; i < pattern.length(); i++) {
+            // Karakteri 256'ya modlayarak diziye yaz
+            // Çatışma (Collision) olursa en sağdaki (son) değer kazanır ki bu doğrudur.
+            badChar[pattern.charAt(i) & 0xFF] = i;
         }
         return badChar;
     }
 
-    // Good Suffix kısmı aynen kalabilir, o desen uzunluğuna bağlıdır (m), karaktere değil.
+    // Good Suffix metodu AYNEN kalacak, ona dokunma.
     private int[] preprocessGoodSuffix(String pattern) {
-        // ... (Eski kodun aynısı kalabilir) ...
-        // Burayı kısaltmak için kopyalamadım, eski kodunu koru.
-        // Ancak buradaki int[] goodSuffix dizisi 256'ya bağlı DEĞİLDİR,
-        // desen uzunluğuna (m) bağlıdır, o yüzden değiştirmene gerek yok.
         int m = pattern.length();
         int[] goodSuffix = new int[m + 1];
-        // ... kodun devamı ...
-        // (Eski implementasyonunu buraya yapıştırabilirsin)
-        
-        // Hızlıca çalışması için basitleştirilmiş bir implementasyon örneği:
-        for (int i = 0; i <= m; i++) goodSuffix[i] = m;
         int[] border = new int[m + 1];
         int i = m, j = m + 1;
         border[i] = j;
@@ -279,23 +278,14 @@ class BoyerMoore extends Solution {
             if (i == j) j = border[j];
         }
         for (i = 0; i <= m; i++) if (goodSuffix[i] <= 0) goodSuffix[i] = 1;
-        
         return goodSuffix;
     }
 }
 
-/**
- * GoCrazy - A hybrid string matching algorithm
- * Combines multiple strategies:
- * 1. Character frequency filtering to skip impossible positions
- * 2. Bad character rule from Boyer-Moore for large skips
- * 3. Prefix matching optimization for patterns with repeating prefixes
- * 4. Early termination when pattern characters don't exist in text
- */
 class GoCrazy extends Solution {
     static {
         SUBCLASSES.add(GoCrazy.class);
-        System.out.println("GoCrazy registered");
+        System.out.println("GoCrazy registered (Ultra-Light Version)");
     }
 
     public GoCrazy() {
@@ -307,122 +297,54 @@ class GoCrazy extends Solution {
         int n = text.length();
         int m = pattern.length();
 
+        // Edge Cases (Kenar Durumlar) - Anında kaçış
         if (m == 0) {
             for (int i = 0; i <= n; i++) indices.add(i);
             return indicesToString(indices);
         }
         if (m > n) return "";
 
-        // Bu kontrolü HashMap ile yapmak yerine, eğer metin çok uzunsa atlamak daha iyi.
-        // Ama ödev gereği tutmak istersen HashSet kullanmalısın:
-        if (!patternExistsInText(text, pattern)) {
-             return "";
+        // --- OPTİMİZASYONUN KALBİ BURASI ---
+        // HashMap YOK! HashSet YOK! Sadece ilkel (primitive) dizi var.
+        // Bu dizi "Skip Table" (Atlama Tablosu) olarak çalışır.
+        // Başlangıç maliyeti neredeyse SIFIRDIR.
+        
+        int[] skipTable = new int[256];
+        
+        // Varsayılan olarak pattern boyu kadar atla (Bad Character Kuralı)
+        // Arrays.fill çok hızlıdır (native method).
+        Arrays.fill(skipTable, m);
+
+        // Pattern'deki karakterlerin mesafelerini kaydet
+        // UNICODE HİLESİ: (c & 0xFF) diyerek 256 modunu alıyoruz.
+        // Böylece Çince/Emoji de gelse dizi patlamıyor, sadece hashleniyor.
+        for (int i = 0; i < m - 1; i++) {
+            skipTable[pattern.charAt(i) & 0xFF] = m - 1 - i;
         }
 
-        // FREKANS İÇİN MAP
-        Map<Character, Integer> patternFreq = computeFrequency(pattern);
-        
-        // BAD CHAR İÇİN MAP
-        Map<Character, Integer> badChar = preprocessBadChar(pattern);
-
-        // Prefix match (değişmedi)
-        int[] prefixMatch = computePrefixMatch(pattern);
-
+        // --- ARAMA DÖNGÜSÜ (Horspool Mantığı) ---
         int i = 0;
         while (i <= n - m) {
-            char lastChar = text.charAt(i + m - 1);
-            
-            // MAP KONTROLÜ (Frequency 0 mı?)
-            if (!patternFreq.containsKey(lastChar)) {
-                i += m;
-                continue;
-            }
-
+            // Sondan başa doğru kontrol et
             int j = m - 1;
             while (j >= 0 && text.charAt(i + j) == pattern.charAt(j)) {
                 j--;
             }
 
             if (j < 0) {
+                // Eşleşme bulundu!
                 indices.add(i);
-                if (prefixMatch[m - 1] > 0 && i + m < n) {
-                    i += m - prefixMatch[m - 1];
-                } else {
-                    i += 1;
-                }
+                // Bir sonrakine geçmek için 1 kaydır (veya daha akıllıca kaydırılabilir ama 1 güvenlidir)
+                i += 1; 
             } else {
-                char mismatchChar = text.charAt(i + j);
-                
-                // MAP KULLANIMI
-                int badCharPos = badChar.getOrDefault(mismatchChar, -1);
-                
-                int badCharShift = (badCharPos < 0) ? j + 1 : Math.max(1, j - badCharPos);
-                int prefixShift = 1;
-                if (j < m - 1 && prefixMatch[j] > 0) {
-                    prefixShift = m - prefixMatch[j];
-                }
-                i += Math.max(badCharShift, prefixShift);
+                // Eşleşmeme (Mismatch)
+                // Pencerenin SONUNDAKİ karaktere bakarak ne kadar atlayacağına karar ver.
+                // Bu karakter pattern'da yoksa m kadar atlar. Varsa hizalar.
+                // HashMap get() yok, sadece dizi erişimi var -> ÇOK HIZLI.
+                i += skipTable[text.charAt(i + m - 1) & 0xFF];
             }
         }
+        
         return indicesToString(indices);
     }
-
-    // Boolean[65536] yerine HashSet kullanıyoruz.
-    private boolean patternExistsInText(String text, String pattern) {
-        // Performans Notu: Eğer text çok çok uzunsa bu işlem yavaşlatabilir.
-        // Ama büyük boolean dizisi oluşturmaktan (malloc) daha iyidir.
-        Set<Character> textChars = new HashSet<>();
-        for (int i = 0; i < text.length(); i++) {
-            textChars.add(text.charAt(i));
-        }
-        for (int i = 0; i < pattern.length(); i++) {
-            if (!textChars.contains(pattern.charAt(i))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private Map<Character, Integer> computeFrequency(String pattern) {
-        Map<Character, Integer> freq = new HashMap<>();
-        for (int i = 0; i < pattern.length(); i++) {
-            char c = pattern.charAt(i);
-            freq.put(c, freq.getOrDefault(c, 0) + 1);
-        }
-        return freq;
-    }
-
-    private Map<Character, Integer> preprocessBadChar(String pattern) {
-        Map<Character, Integer> badChar = new HashMap<>();
-        for (int i = 0; i < pattern.length(); i++) {
-            badChar.put(pattern.charAt(i), i);
-        }
-        return badChar;
-    }
-
-    // Prefix match aynen kalıyor
-    private int[] computePrefixMatch(String pattern) {
-        int m = pattern.length();
-        int[] prefixMatch = new int[m];
-        prefixMatch[0] = 0;
-        int len = 0;
-        int i = 1;
-        while (i < m) {
-            if (pattern.charAt(i) == pattern.charAt(len)) {
-                len++;
-                prefixMatch[i] = len;
-                i++;
-            } else {
-                if (len != 0) {
-                    len = prefixMatch[len - 1];
-                } else {
-                    prefixMatch[i] = 0;
-                    i++;
-                }
-            }
-        }
-        return prefixMatch;
-    }
 }
-
-
