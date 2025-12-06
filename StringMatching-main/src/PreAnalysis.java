@@ -1,4 +1,4 @@
-import java.util.*;
+
 /**
  * PreAnalysis interface for students to implement their algorithm selection logic
  * 
@@ -36,174 +36,171 @@ public abstract class PreAnalysis {
 
 /**
  * Student implementation of pre-analysis logic
- * Analyzes text and pattern characteristics to choose the optimal algorithm
+ * Theory-driven selection optimized for our 5 algorithms:
+ * Naive, KMP, RabinKarp, BoyerMoore, GoCrazy (Adaptive Horspool++)
  */
 class StudentPreAnalysis extends PreAnalysis {
     
-    // Constants for better maintainability
-    private static final int VERY_SHORT_PATTERN_THRESHOLD = 2;
-    private static final int SHORT_PATTERN_THRESHOLD = 5;
-    private static final int MEDIUM_PATTERN_THRESHOLD = 15;
-    private static final int SHORT_TEXT_THRESHOLD = 250;
-    private static final int MEDIUM_TEXT_THRESHOLD = 500;
-    private static final int LONG_TEXT_THRESHOLD = 1000;
-    private static final int LARGE_ALPHABET_THRESHOLD = 20;
-    private static final int ALPHABET_SAMPLE_SIZE = 500;
-    private static final int MIN_PATTERN_FOR_ALPHABET_CHECK = 6;
+    // Pattern length thresholds
+    private static final int SINGLE_CHAR = 1;
+    private static final int VERY_SHORT = 3;
+    private static final int SHORT = 8;
+    private static final int MEDIUM = 20;
+    private static final int LONG = 50;
+    
+    // Text length thresholds
+    private static final int TINY_TEXT = 100;
+    private static final int SMALL_TEXT = 1000;
+    private static final int MEDIUM_TEXT = 10000;
+    
+    // Pattern characteristic thresholds
+    private static final double HIGH_REPETITION = 0.4;
+    private static final int MIN_FOR_REPETITION_CHECK = 4;
     
     @Override
     public String chooseAlgorithm(String text, String pattern) {
-        int textLen = text.length();
-        int patternLen = pattern.length();
+        int n = text.length();
+        int m = pattern.length();
         
-        // ===== STAGE 1: Edge Cases (Immediate Return) =====
-        if (patternLen == 0 || patternLen > textLen) {
+        // Edge cases
+        if (m == 0 || m > n) {
             return "Naive";
         }
-        
-        // ===== STAGE 2: Very Short Patterns (≤2 chars) =====
-        // Naive has minimal overhead for tiny patterns
-        if (patternLen <= VERY_SHORT_PATTERN_THRESHOLD) {
-            return "Naive";
-        }
-        
-        // ===== STAGE 3: Short Patterns (3-5 chars) =====
-        if (patternLen <= SHORT_PATTERN_THRESHOLD) {
-            // For short texts, avoid preprocessing overhead
-            if (textLen <= SHORT_TEXT_THRESHOLD) {
+
+        // ═══════════════════════════════════════════════════════════
+        // RULE 2: Very short patterns (2-3 chars) → Context matters
+        // ═══════════════════════════════════════════════════════════
+        if (m <= VERY_SHORT) {
+            // For tiny texts, Naive has no overhead
+            if (m == 1 || n <= TINY_TEXT) {
                 return "Naive";
             }
-            // Boyer-Moore excels with short patterns in longer texts
-            return "BoyerMoore";
+            // GoCrazy's Horspool skip table is lightweight and effective
+            // Better than BoyerMoore's heavier preprocessing for short patterns
+            return "GoCrazy";
         }
         
-        // ===== STAGE 4: KMP Special Case (Repeating Patterns) =====
-        // KMP shines when pattern has strong repeating prefixes
-        // Check this early as it's a strong indicator
-        if (hasStrongRepeatingPrefix(pattern)) {
+        // ═══════════════════════════════════════════════════════════
+        // RULE 3: Detect highly repetitive patterns → KMP WINS
+        // ═══════════════════════════════════════════════════════════
+        // KMP's LPS table excels when pattern has self-similarity
+        // Examples: "AAAA", "ABABAB", "ABCABCABC"
+        if (m >= MIN_FOR_REPETITION_CHECK && hasHighRepetition(pattern)) {
             return "KMP";
         }
         
-        // ===== STAGE 5: Alphabet Analysis (Only for longer texts) =====
-        // This is expensive, so only do it when it matters
-        if (textLen > MEDIUM_TEXT_THRESHOLD && patternLen >= MIN_PATTERN_FOR_ALPHABET_CHECK) {
-            int alphabetSize = calculateAlphabetSize(text, pattern);
-            
-            // Large alphabet = more skip opportunities for Boyer-Moore
-            if (alphabetSize > LARGE_ALPHABET_THRESHOLD) {
-                return "BoyerMoore";
-            }
-        }
-        
-        // ===== STAGE 6: Long Patterns with Long Texts =====
-        // Rabin-Karp's rolling hash is efficient here
-        if (patternLen > MEDIUM_PATTERN_THRESHOLD && textLen > LONG_TEXT_THRESHOLD) {
-            return "RabinKarp";
-        }
-        
-        // ===== STAGE 7: Medium Patterns (6-15 chars) =====
-        if (patternLen >= MIN_PATTERN_FOR_ALPHABET_CHECK && patternLen <= MEDIUM_PATTERN_THRESHOLD) {
-            // Still avoid overhead on short texts
-            if (textLen < SHORT_TEXT_THRESHOLD) {
+        // ═══════════════════════════════════════════════════════════
+        // RULE 4: Short-medium patterns (4-8 chars) → Horspool territory
+        // ═══════════════════════════════════════════════════════════
+        if (m <= SHORT) {
+            // Very small texts still favor Naive (no preprocessing)
+            if (n < TINY_TEXT) {
                 return "Naive";
             }
-            // Boyer-Moore is generally best for medium patterns
-            return "BoyerMoore";
+            // GoCrazy's Horspool with last-char caching is optimal here
+            // Lighter than BoyerMoore, faster skips than Naive/KMP/RabinKarp
+            return "GoCrazy";
         }
         
-        // ===== STAGE 8: Very Long Patterns (>15 chars) =====
-        if (patternLen > MEDIUM_PATTERN_THRESHOLD) {
-            // For longer texts, Rabin-Karp's preprocessing pays off
-            if (textLen > MEDIUM_TEXT_THRESHOLD) {
+        // ═══════════════════════════════════════════════════════════
+        // RULE 5: Medium patterns (9-20 chars) → BoyerMoore vs GoCrazy
+        // ═══════════════════════════════════════════════════════════
+        if (m <= MEDIUM) {
+            // For large texts, BoyerMoore's good suffix rule adds value
+            // Its preprocessing overhead is justified by skip efficiency
+            if (n >= SMALL_TEXT) {
+                return "BoyerMoore";
+            }
+            // For smaller texts, GoCrazy is still competitive
+            // Lighter preprocessing, decent skips
+            return "GoCrazy";
+        }
+        
+        // ═══════════════════════════════════════════════════════════
+        // RULE 6: Long patterns (21-50 chars) → RabinKarp starts winning
+        // ═══════════════════════════════════════════════════════════
+        if (m <= LONG) {
+            // For very large texts, RabinKarp's O(n+m) rolling hash shines
+            // Constant-time hash comparison regardless of pattern length
+            if (n >= MEDIUM_TEXT) {
                 return "RabinKarp";
             }
-            // Otherwise Boyer-Moore is reliable
-            return "BoyerMoore";
+            // For medium texts, BoyerMoore can still skip effectively
+            if (n >= SMALL_TEXT) {
+                return "BoyerMoore";
+            }
+            // For smaller texts, simpler algorithms suffice
+            return "GoCrazy";
         }
         
-        // ===== DEFAULT: Boyer-Moore =====
-        // Most versatile algorithm for general cases
-        return "BoyerMoore";
-    }
-    
-    // ========== HELPER METHODS ==========
-    
-    /**
-     * Calculates alphabet size using HashSet for memory efficiency and Unicode support.
-     * Uses sampling to avoid scanning entire large texts.
-     * 
-     * Time Complexity: O(min(textLen, SAMPLE_SIZE) + patternLen)
-     * Space Complexity: O(alphabetSize)
-     */
-    private int calculateAlphabetSize(String text, String pattern) {
-        Set<Character> uniqueChars = new HashSet<>();
-        
-        // Sample first N characters of text for diversity estimation
-        int textSampleSize = Math.min(text.length(), ALPHABET_SAMPLE_SIZE);
-        for (int i = 0; i < textSampleSize; i++) {
-            uniqueChars.add(text.charAt(i));
-        }
-        
-        // Always include all pattern characters
-        for (int i = 0; i < pattern.length(); i++) {
-            uniqueChars.add(pattern.charAt(i));
-        }
-        
-        return uniqueChars.size();
+        // ═══════════════════════════════════════════════════════════
+        // RULE 7: Very long patterns (>50 chars) → RabinKarp DOMINATES
+        // ═══════════════════════════════════════════════════════════
+        // RabinKarp's O(m) preprocessing is manageable even for long patterns
+        // BoyerMoore's preprocessing cost grows significantly with pattern length
+        // Rolling hash comparison is O(1) regardless of pattern length
+        return "RabinKarp";
     }
     
     /**
-     * Detects patterns with strong repeating prefixes (favorable for KMP).
-     * Checks two conditions:
-     * 1. High frequency of first character in pattern prefix
-     * 2. Repeating substring patterns
+     * Detects patterns with high character repetition or repeating substrings
+     * These patterns benefit greatly from KMP's LPS (Longest Proper Prefix 
+     * which is also Suffix) table
      * 
-     * Time Complexity: O(patternLen)
-     * Space Complexity: O(1)
+     * Detection methods:
+     * 1. Character frequency: If any char appears in 40%+ of pattern
+     * 2. Substring repetition: If pattern contains repeating substrings
+     * 
+     * Time: O(m²) worst case for substring check, but early exits common
+     * Space: O(256) for character frequency array
      */
-    private boolean hasStrongRepeatingPrefix(String pattern) {
-        int patternLen = pattern.length();
+    private boolean hasHighRepetition(String pattern) {
+        int m = pattern.length();
         
-        // Need at least 4 characters to detect meaningful patterns
-        if (patternLen < 4) {
-            return false;
-        }
+        // Method 1: Character frequency analysis
+        int[] freq = new int[256];
+        int maxFreq = 0;
         
-        // === Check 1: Character Repetition ===
-        // If first character repeats frequently, KMP handles this well
-        char firstChar = pattern.charAt(0);
-        int repeatCount = 0;
-        int checkLen = Math.min(patternLen, 8); // Check first 8 chars
-        
-        for (int i = 0; i < checkLen; i++) {
-            if (pattern.charAt(i) == firstChar) {
-                repeatCount++;
+        for (int i = 0; i < m; i++) {
+            char c = pattern.charAt(i);
+            if (c < 256) {
+                freq[c]++;
+                maxFreq = Math.max(maxFreq, freq[c]);
             }
         }
         
-        // If 40%+ of checked chars match first char, it's a strong pattern
-        if (repeatCount * 100 / checkLen >= 40) {
+        // If any character appears in 40%+ of pattern → highly repetitive
+        double ratio = (double) maxFreq / m;
+        if (ratio >= HIGH_REPETITION) {
             return true;
         }
         
-        // === Check 2: Substring Repetition ===
-        // Detect patterns like "abcabcabc" or "xyxyxy"
-        if (patternLen >= 6) {
-            int prefixLen = Math.min(3, patternLen / 2);
-            String prefix = pattern.substring(0, prefixLen);
-            int matches = 0;
-            
-            // Check if prefix repeats in the pattern
-            int searchLimit = Math.min(patternLen, prefixLen * 4);
-            for (int i = prefixLen; i + prefixLen <= searchLimit; i += prefixLen) {
-                if (pattern.startsWith(prefix, i)) {
-                    matches++;
+        // Method 2: Repeating substring detection
+        // Check if pattern is composed of repeating substrings
+        // E.g., "ABCABC" = "ABC" repeated, "XYXYXY" = "XY" repeated
+        if (m >= 6) {
+            // Try different substring lengths (2 to m/2)
+            for (int subLen = 2; subLen <= m / 2; subLen++) {
+                // Only check if pattern length is divisible by substring length
+                // or nearly divisible (for partial repeats at the end)
+                String substring = pattern.substring(0, subLen);
+                boolean isRepeating = true;
+                
+                // Check if this substring repeats throughout pattern
+                for (int i = subLen; i < m; i += subLen) {
+                    int endIdx = Math.min(i + subLen, m);
+                    String currentSection = pattern.substring(i, endIdx);
+                    String expectedSection = substring.substring(0, endIdx - i);
+                    
+                    if (!currentSection.equals(expectedSection)) {
+                        isRepeating = false;
+                        break;
+                    }
                 }
-            }
-            
-            // If prefix repeats 2+ times, KMP will benefit
-            if (matches >= 2) {
-                return true;
+                
+                if (isRepeating) {
+                    return true;
+                }
             }
         }
         
@@ -212,17 +209,40 @@ class StudentPreAnalysis extends PreAnalysis {
     
     @Override
     public String getStrategyDescription() {
-        return "Advanced multi-stage analysis: " +
-               "(1) Edge case handling, " +
-               "(2) Pattern length thresholds with overhead consideration, " +
-               "(3) KMP detection for repeating prefixes, " +
-               "(4) Alphabet diversity analysis with text sampling (Boyer-Moore optimization), " +
-               "(5) Rabin-Karp for long pattern-text combinations, " +
-               "(6) Naive fallback for short texts to minimize preprocessing overhead. " +
-               "Uses constants for maintainability and comprehensive documentation.";
+        return "Theory-driven algorithm selection optimized for our specific implementations:\n" +
+               "\n" +
+               "GoCrazy (Adaptive Horspool++):\n" +
+               "  - Single char: Ultra-fast linear scan (O(n))\n" +
+               "  - Short patterns (2-8): Lightweight Horspool skip table + last-char caching\n" +
+               "  - Best for: m ≤ 8, especially when n < 1000\n" +
+               "\n" +
+               "KMP (Knuth-Morris-Pratt):\n" +
+               "  - O(n+m) with LPS table\n" +
+               "  - Best for: Repetitive patterns (40%+ char repetition or repeating substrings)\n" +
+               "  - Examples: 'AAAA', 'ABABAB', 'ABCABCABC'\n" +
+               "\n" +
+               "BoyerMoore:\n" +
+               "  - O(n/m) best case with bad char + good suffix rules\n" +
+               "  - Best for: Medium patterns (9-20) with large texts (n ≥ 1000)\n" +
+               "  - Heavier preprocessing justified by large skip distances\n" +
+               "\n" +
+               "RabinKarp:\n" +
+               "  - O(n+m) average with rolling hash\n" +
+               "  - Best for: Long patterns (m > 20) with very large texts (n ≥ 10000)\n" +
+               "  - O(1) hash comparison regardless of pattern length\n" +
+               "\n" +
+               "Naive:\n" +
+               "  - O(n*m) brute force\n" +
+               "  - Best for: Edge cases (m=0, m>n) or tiny inputs (n < 100, m ≤ 3)\n" +
+               "  - Zero preprocessing overhead\n" +
+               "\n" +
+               "Decision factors:\n" +
+               "  - Pattern length (m): Primary factor for algorithm selection\n" +
+               "  - Text length (n): Determines if preprocessing overhead is justified\n" +
+               "  - Pattern characteristics: Repetition detection for KMP\n" +
+               "  - Preprocessing vs. search trade-off: Shorter patterns favor lighter algorithms";
     }
 }
-
 
 
 /**
